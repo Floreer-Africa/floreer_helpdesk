@@ -31,7 +31,7 @@
         />
       </div>
       <div class="mx-6 md:mx-5 flex items-center gap-2 border-y py-2.5">
-        <span class="text-p-xs text-gray-500">{{ __("To") }}:</span>
+        <span class="text-p-xs text-ink-gray-4">{{ __("To") }}:</span>
         <MultiSelectInput
           v-model="toEmailsClone"
           class="flex-1"
@@ -66,7 +66,7 @@
         class="mx-5 flex items-center gap-2 py-2.5"
         :class="cc || showCC ? 'border-b' : ''"
       >
-        <span class="text-xs text-gray-500">{{ __("Cc:") }}</span>
+        <span class="text-xs text-ink-gray-4">{{ __("Cc:") }}</span>
         <MultiSelectInput
           ref="ccInput"
           v-model="ccEmailsClone"
@@ -80,7 +80,7 @@
         class="mx-5 flex items-center gap-2 py-2.5"
         :class="bcc || showBCC ? 'border-b' : ''"
       >
-        <span class="text-xs text-gray-500">{{ __("Bcc:") }}</span>
+        <span class="text-xs text-ink-gray-4">{{ __("Bcc:") }}</span>
         <MultiSelectInput
           ref="bccInput"
           v-model="bccEmailsClone"
@@ -92,9 +92,14 @@
     </template>
 
     <template #editor>
-      <div class="overflow-y-auto min-h-[7rem] max-h-[30vh]">
-        <EditorContent :editor="editor" />
-        <div v-if="quotedContent" class="replied-content mx-6 md:mx-5 mb-2">
+      <div class="overflow-y-auto min-h-[7rem] max-h-[30vh] flex flex-col">
+        <div class="flex-1">
+          <EditorContent :editor="editor" />
+        </div>
+        <div
+          v-if="quotedContent"
+          class="replied-content mx-6 md:mx-5 mb-2 mt-auto"
+        >
           <label class="collapse" for="quoted-toggle">...</label>
           <input
             id="quoted-toggle"
@@ -105,7 +110,7 @@
           <div
             ref="quotedContentRef"
             contenteditable="true"
-            class="prose !max-w-full mx-1 my-2 border-l-4 border-gray-300 pl-4 text-sm focus:outline-none"
+            class="prose !max-w-full mx-1 my-2 border-s-4 border-outline-gray-2 ps-4 text-sm focus:outline-none"
             @input="onQuotedInput"
           />
         </div>
@@ -150,7 +155,7 @@
               <template #default="{ openFileSelector, uploading }">
                 {{ void (isUploading = uploading) }}
                 <button
-                  class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-2"
+                  class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
                   @click="openFileSelector()"
                   :disabled="uploading"
                 >
@@ -162,16 +167,16 @@
               </template>
             </FileUploader>
             <button
-              class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-2"
+              class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
               @click="showSavedRepliesSelectorModal = true"
             >
               <SavedReplyIcon class="h-4 w-4" />
             </button>
-            <div class="h-4 w-[2px] border-l" />
+            <div class="h-4 w-[2px] border-s" />
           </div>
           <TextEditorFixedMenu :buttons="textEditorMenuButtons" />
         </div>
-        <div class="flex items-center justify-end space-x-2 sm:mt-0 w-[40%]">
+        <div class="flex items-center justify-end gap-x-2 sm:mt-0 w-[40%]">
           <Button label="Discard" @click="handleDiscard" />
           <Button
             variant="solid"
@@ -204,6 +209,7 @@ import {
 } from "@/components";
 import { AttachmentIcon } from "@/components/icons";
 import { useTyping } from "@/composables/realtime";
+import { getUserEmailInfo } from "@/composables/useUserEmailInfo";
 import { useAuthStore } from "@/stores/auth";
 import {
   CleanStyles,
@@ -282,7 +288,7 @@ const { isManager } = useAuthStore();
 const { onUserType, cleanup } = useTyping(props.ticketId);
 
 const editorRef = ref(null);
-const editor = computed(() => editorRef.value.editor);
+const editor = computed(() => editorRef.value?.editor);
 
 function focusEditorAtStart() {
   setTimeout(() => {
@@ -304,23 +310,7 @@ function isOnlySignature(content: string | null) {
   return htmlToText(content) === htmlToText(emailSignature.value);
 }
 
-const userResource = createResource({
-  url: "helpdesk.api.auth.get_current_user_email_info",
-  cache: "current-user-email-info",
-  auto: true,
-  onSuccess: (data: { email_signature?: string }) => {
-    if (data.email_signature) {
-      emailSignature.value = `<br>${data.email_signature}`;
-      if (isContentEmpty(newEmail.value) && !quotedContent.value) {
-        newEmail.value = emailSignature.value;
-        focusEditorAtStart();
-      }
-      if (isOnlySignature(cachedEmail.value)) {
-        cachedEmail.value = null;
-      }
-    }
-  },
-});
+const userResource = getUserEmailInfo();
 
 watch(newEmail, (newValue, oldValue) => {
   if (newValue !== oldValue && newValue) {
@@ -351,6 +341,22 @@ watch(quotedContent, (newVal, oldVal) => {
     });
   }
 });
+
+watch(
+  () => userResource.data,
+  (data: { email_signature?: string } | null) => {
+    if (!data?.email_signature) return;
+    emailSignature.value = `<br>${data.email_signature}`;
+    if (isOnlySignature(cachedEmail.value)) {
+      cachedEmail.value = null;
+    }
+    if (isContentEmpty(newEmail.value) && !quotedContent.value) {
+      newEmail.value = emailSignature.value;
+      focusEditorAtStart();
+    }
+  },
+  { immediate: true }
+);
 
 onMounted(() => {
   if (quotedContent.value) {
@@ -483,9 +489,13 @@ function submitMail() {
   if (isContentEmpty(newEmail.value) && isContentEmpty(quotedContent.value)) {
     return false;
   }
-  if (!toEmailsClone.value.length) {
+  if (
+    !toEmailsClone.value.length &&
+    !ccEmailsClone.value.length &&
+    !bccEmailsClone.value.length
+  ) {
     toast.warning(
-      "Email has no recipients. Please add at least one email address in the 'TO' field."
+      "Email has no recipients. Please add at least one recipient (To, Cc, or Bcc) before sending."
     );
     return false;
   }
@@ -605,12 +615,6 @@ function handleKeydown(e: KeyboardEvent) {
     return;
   }
 }
-
-watch(emailSignature, (sig) => {
-  if (sig && isContentEmpty(newEmail.value)) {
-    newEmail.value = sig;
-  }
-});
 
 onBeforeUnmount(() => {
   cleanup();

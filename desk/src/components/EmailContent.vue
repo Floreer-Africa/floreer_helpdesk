@@ -7,7 +7,7 @@
 </template>
 
 <script setup lang="ts">
-import { getFontFamily } from "@/utils";
+import { dataTheme, getFontFamily, stripEmailColors } from "@/utils";
 import { computed, ref, watch } from "vue";
 
 const props = defineProps({
@@ -18,7 +18,7 @@ const props = defineProps({
 });
 
 const iframeRef = ref<HTMLIFrameElement | null>(null);
-const _content = ref(props.content);
+const _content = ref(stripEmailColors(props.content));
 
 // Get CSS path - in dev Vite serves it directly, in prod we need the built path
 const cssHref = computed(() => {
@@ -203,8 +203,7 @@ watch(iframeRef, (iframe) => {
 
       const parent = emailContent.closest("html");
       if (!parent) return;
-      let theme = document.documentElement.getAttribute("data-theme");
-      parent.setAttribute("data-theme", theme);
+      parent.setAttribute("data-theme", dataTheme.value);
 
       const font = getFontFamily(_content.value);
       if (font) emailContent.classList.add(font);
@@ -218,6 +217,21 @@ watch(iframeRef, (iframe) => {
         );
       });
 
+      // This is to ensure that keyboard shortcuts work even when the iframe is focused. For example, pressing "r" to reply to an email should work even if the user has clicked inside the email content.
+      iframe.contentDocument?.addEventListener("keydown", (e) => {
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: e.key,
+            code: e.code,
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            shiftKey: e.shiftKey,
+            altKey: e.altKey,
+            bubbles: true,
+          })
+        );
+      });
+
       const replyCollapsers = emailContent.querySelectorAll(".replyCollapser");
       if (replyCollapsers.length) {
         replyCollapsers.forEach((replyCollapser) => {
@@ -228,5 +242,10 @@ watch(iframeRef, (iframe) => {
       }
     };
   }
+});
+
+watch(dataTheme, (theme) => {
+  const html = iframeRef.value?.contentDocument?.documentElement;
+  if (html) html.setAttribute("data-theme", theme);
 });
 </script>

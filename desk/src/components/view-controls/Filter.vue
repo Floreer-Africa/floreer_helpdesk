@@ -3,8 +3,8 @@
     <template #target="{ togglePopover, close }">
       <div class="flex items-center w-fit">
         <Button
-          :label="'Filter'"
-          :class="filters?.size ? 'rounded-r-none' : ''"
+          :label="__('Filter')"
+          :class="filters?.size ? 'rounded-e-none' : ''"
           @click="togglePopover"
         >
           <template #prefix><FilterIcon class="h-4" /></template>
@@ -19,8 +19,8 @@
         <Tooltip v-if="filters?.size" :text="'Clear all Filter'">
           <div>
             <Button
-              class="rounded-l-none border-l"
-              icon="x"
+              class="rounded-s-none border-s"
+              icon="lucide-x"
               @click.stop="clearfilter(close)"
             />
           </div>
@@ -28,7 +28,9 @@
       </div>
     </template>
     <template #body="{ close }">
-      <div class="my-2 rounded-lg border border-gray-100 bg-white shadow-xl">
+      <div
+        class="my-2 rounded-lg border border-outline-gray-1 bg-surface-white shadow-xl"
+      >
         <div class="min-w-72 p-2 sm:min-w-[400px]">
           <div
             v-if="filters?.size"
@@ -39,13 +41,13 @@
           >
             <div v-if="isMobileView" class="flex flex-col gap-2">
               <div class="-mb-2 flex w-full items-center justify-between">
-                <div class="text-base text-gray-600">
+                <div class="text-base text-ink-gray-5">
                   {{ i == 0 ? "Where" : "And" }}
                 </div>
                 <Button
                   class="flex"
                   variant="ghost"
-                  icon="x"
+                  icon="lucide-x"
                   @click="removeFilter(i)"
                 />
               </div>
@@ -72,13 +74,13 @@
                   :model-value="f.value"
                   @update:modelValue="(v) => updateValue(v, f)"
                   @change="(v) => updateValue(v, f)"
-                  :placeholder="'John Doe'"
+                  :placeholder="getValuePlaceholder(f)"
                 />
               </div>
             </div>
             <div v-else class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 flex-1">
-                <div class="w-13 pl-2 text-end text-base text-gray-600">
+                <div class="w-13 ps-2 text-end text-base text-ink-gray-5">
                   {{ i == 0 ? "Where" : "And" }}
                 </div>
                 <div id="fieldname" class="!min-w-[140px]">
@@ -107,23 +109,23 @@
                     :model-value="f.value"
                     @change="(v) => updateValue(v, f)"
                     @update:modelValue="(v) => updateValue(v, f)"
-                    :placeholder="'John Doe'"
+                    :placeholder="getValuePlaceholder(f)"
                   />
                 </div>
               </div>
               <Button
                 class="flex"
                 variant="ghost"
-                icon="x"
+                icon="lucide-x"
                 @click="removeFilter(i)"
               />
             </div>
           </div>
           <div
             v-else
-            class="mb-3 flex h-7 items-center px-3 text-sm text-gray-600"
+            class="mb-3 flex h-7 items-center px-3 text-sm text-ink-gray-5"
           >
-            {{ "Empty - Choose a field to filter by" }}
+            {{ __("Empty - Choose a field to filter by") }}
           </div>
           <div class="flex items-center justify-between gap-2">
             <Autocomplete
@@ -133,10 +135,10 @@
             >
               <template #target="{ togglePopover }">
                 <Button
-                  class="!text-gray-600"
+                  class="!text-ink-gray-5"
                   variant="ghost"
                   @click="togglePopover()"
-                  :label="'Add Filter'"
+                  :label="__('Add Filter')"
                 >
                   <template #prefix>
                     <FeatherIcon name="plus" class="h-4" />
@@ -146,7 +148,7 @@
             </Autocomplete>
             <Button
               v-if="filters?.size"
-              class="!text-gray-600"
+              class="!text-ink-gray-5"
               variant="ghost"
               :label="'Clear all Filter'"
               @click="clearfilter(close)"
@@ -163,8 +165,8 @@ import FilterIcon from "@/components/icons/FilterIcon.vue";
 import { useScreenSize } from "@/composables/screen";
 import { useDebounceFn } from "@vueuse/core";
 import {
-  Autocomplete,
   Button,
+  Combobox,
   DatePicker,
   DateRangePicker,
   DateTimePicker,
@@ -173,6 +175,7 @@ import {
   Popover,
   Tooltip,
 } from "frappe-ui";
+import Autocomplete from "@/components/frappe-ui/Autocomplete.vue";
 import { computed, h, inject } from "vue";
 
 const props = defineProps({
@@ -357,9 +360,11 @@ function getValueControl(f) {
       ],
     });
   } else if (operator == "timespan") {
-    return h(FormControl, {
-      type: "select",
+    return h(Combobox, {
       options: timespanOptions,
+      trigger: "button",
+      modelValue: f.value,
+      "onUpdate:modelValue": (v) => updateValue(v, f),
     });
   } else if (["like", "not like", "in", "not in"].includes(operator)) {
     return h(FormControl, { type: "text" });
@@ -397,6 +402,27 @@ function getValueControl(f) {
   } else {
     return h(FormControl, { type: "text" });
   }
+}
+
+function getValuePlaceholder(f) {
+  const { field, operator } = f;
+  const { fieldtype } = field;
+  const isNumber = typeNumber.includes(fieldtype);
+  if (operator === "between") return __("01/01/2022 to 01/31/2022");
+  if (operator === "in" || operator === "not in") {
+    return isNumber ? __("100, 200, 300") : __("John, Jane, Doe");
+  }
+  if (operator === "like" || operator === "not like") {
+    return isNumber ? __("%100%") : __("%John%");
+  }
+  if (operator === "is" || operator === "is not") return __("Set");
+  if (operator === "timespan") return __("Last Week");
+  if (isNumber) return __("1000");
+  if (typeDate.includes(fieldtype)) return __("01/01/2022");
+  if (typeCheck.includes(fieldtype)) return __("Yes");
+  if (typeLink.includes(fieldtype)) return __("Select a Value");
+  if (typeSelect.includes(fieldtype)) return __("Select an Option");
+  return __("John Doe");
 }
 
 function getDefaultValue(field) {
@@ -485,6 +511,9 @@ function clearfilter(close) {
 }
 
 function updateValue(value, filter) {
+  if (value && typeof value === "object" && !value.target && "value" in value) {
+    value = value.value;
+  }
   value = value.target ? value.target.value : value;
   if (filter.operator === "in" || filter.operator === "not in") {
     filter.value = value.split(",").map((v) => v.trim());
@@ -604,74 +633,35 @@ const oppositeOperatorMap = {
 };
 
 const timespanOptions = [
-  {
-    label: "Last Week",
-    value: "last week",
-  },
-  {
-    label: "Last Month",
-    value: "last month",
-  },
-  {
-    label: "Last Quarter",
-    value: "last quarter",
-  },
-  {
-    label: "Last 6 Months",
-    value: "last 6 months",
-  },
-  {
-    label: "Last Year",
-    value: "last year",
-  },
-  {
-    label: "Yesterday",
-    value: "yesterday",
-  },
-  {
-    label: "Today",
-    value: "today",
-  },
-  {
-    label: "Tomorrow",
-    value: "tomorrow",
-  },
-  {
-    label: "This Week",
-    value: "this week",
-  },
-  {
-    label: "This Month",
-    value: "this month",
-  },
-  {
-    label: "This Quarter",
-    value: "this quarter",
-  },
-  {
-    label: "This Year",
-    value: "this year",
-  },
-  {
-    label: "Next Week",
-    value: "next week",
-  },
-  {
-    label: "Next Month",
-    value: "next month",
-  },
-  {
-    label: "Next Quarter",
-    value: "next quarter",
-  },
-  {
-    label: "Next 6 Months",
-    value: "next 6 months",
-  },
-  {
-    label: "Next Year",
-    value: "next year",
-  },
+  { label: "Last 7 Days", value: "last 7 days" },
+  { label: "Last 14 Days", value: "last 14 days" },
+  { label: "Last 30 Days", value: "last 30 days" },
+  { label: "Last 90 Days", value: "last 90 days" },
+
+  { label: "Last Week", value: "last week" },
+  { label: "Last Month", value: "last month" },
+  { label: "Last Quarter", value: "last quarter" },
+  { label: "Last 6 Months", value: "last 6 months" },
+  { label: "Last Year", value: "last year" },
+
+  { label: "Yesterday", value: "yesterday" },
+  { label: "Today", value: "today" },
+  { label: "Tomorrow", value: "tomorrow" },
+
+  { label: "This Week", value: "this week" },
+  { label: "This Month", value: "this month" },
+  { label: "This Quarter", value: "this quarter" },
+  { label: "This Year", value: "this year" },
+
+  { label: "Next 7 Days", value: "next 7 days" },
+  { label: "Next 14 Days", value: "next 14 days" },
+  { label: "Next 30 Days", value: "next 30 days" },
+
+  { label: "Next Week", value: "next week" },
+  { label: "Next Month", value: "next month" },
+  { label: "Next Quarter", value: "next quarter" },
+  { label: "Next 6 Months", value: "next 6 months" },
+  { label: "Next Year", value: "next year" },
 ];
 
 const debouncedApply = useDebounceFn(() => {

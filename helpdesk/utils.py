@@ -60,6 +60,20 @@ def is_agent(user: str = None) -> bool:
     )
 
 
+def get_agent_name(user: str = None) -> str | None:
+    """
+    Get the HD Agent name for `user`
+
+    The HD Agent's name is the user (see HD Agent controller), so this
+    returns the user when an agent record exists, else None.
+
+    :param user: User to check against, defaults to current user
+    :return: HD Agent name, or None if `user` is not an agent
+    """
+    user = user or frappe.session.user
+    return user if frappe.db.exists("HD Agent", user) else None
+
+
 def publish_event(
     event: str,
     room: str | None = None,
@@ -175,15 +189,16 @@ def agent_only(fn):
 
 
 def get_agents_team():
-    QBTeam = frappe.qb.DocType("HD Team")
-    QBTeamMember = frappe.qb.DocType("HD Team Member")
+    Team = frappe.qb.DocType("HD Team")
+    TeamMember = frappe.qb.DocType("HD Team Member")
 
     teams = (
-        frappe.qb.from_(QBTeamMember)
-        .where(QBTeamMember.user == frappe.session.user)
-        .join(QBTeam)
-        .on(QBTeam.name == QBTeamMember.parent)
-        .select(QBTeam.team_name, QBTeam.ignore_restrictions)
+        frappe.qb.from_(TeamMember)
+        .join(Team)
+        .on(Team.name == TeamMember.parent)
+        .where(TeamMember.user == frappe.session.user)
+        .where(Team.disabled == 0)
+        .select(Team.team_name, Team.ignore_restrictions)
         .run(as_dict=True)
     )
     return teams
