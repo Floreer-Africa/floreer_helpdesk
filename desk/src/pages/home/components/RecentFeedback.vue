@@ -9,7 +9,7 @@
           <TabButtons
             :buttons="chartTabs"
             v-model="currentTab"
-            class="sm:hidden"
+            class="sm:hidden z-20"
           />
         </div>
         <!-- Left Panel: Summary Stats -->
@@ -28,7 +28,10 @@
             />
           </div>
           <!-- Average Rating -->
-          <div class="flex items-end justify-between gap-4">
+          <div
+            v-if="chartConfig.totalFeedbacks > 0"
+            class="flex items-end justify-between gap-4"
+          >
             <div class="flex flex-col gap-1">
               <div class="flex items-center gap-1">
                 <LucideStar class="size-4 fill-[#de9735] text-[#de9735]" />
@@ -41,12 +44,23 @@
                 @click="redirectToSeeAllReviews"
               >
                 {{ __("{0} reviews", chartConfig.totalFeedbacks) }}
-                <FeatherIcon name="arrow-up-right" class="size-3.5 ml-0.5" />
+                <FeatherIcon name="arrow-up-right" class="size-3.5 ms-0.5" />
               </div>
             </div>
             <div v-if="chartConfig.totalFeedbacks > 0" class="text-sm">
               {{ __("Your performance is") }}
               {{ performance }}!
+            </div>
+          </div>
+          <div v-else>
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-1">
+                <div class="size-4 bg-surface-gray-1 rounded-sm" />
+                <div class="w-12 h-4 bg-surface-gray-1 rounded-sm" />
+              </div>
+            </div>
+            <div class="text-sm mt-3">
+              <div class="w-24 h-4 bg-surface-gray-1 rounded-sm" />
             </div>
           </div>
           <!-- Bar Chart -->
@@ -63,7 +77,7 @@
             />
           </div>
         </div>
-        <div class="hidden sm:block h-full w-[1px] bg-surface-gray-2"></div>
+        <div class="hidden sm:block h-full w-[1px] bg-surface-gray-1" />
 
         <!-- Right Panel: Feedback Card -->
         <div
@@ -71,39 +85,24 @@
           :class="{ 'hidden sm:flex': currentTab === 'rating' }"
         >
           <!-- Filters -->
-          <div class="flex items-center justify-between mb-3">
-            <Dropdown :options="periodOptions">
+          <div class="flex items-center gap-2 justify-between mb-3 z-20">
+            <!-- Sort dropdown first -->
+            <Dropdown
+              v-if="chartConfig.totalFeedbacks !== 0"
+              :options="sortOptions"
+              placement="left"
+            >
               <template #default>
-                <Button :label="currentPeriodLabel" icon-right="chevron-down" />
-              </template>
-              <template #item-label="{ item }">
-                <div
-                  class="data-[disabled]:cursor-not-allowed group flex w-full items-center rounded px-2 text-base focus:outline-none focus:bg-surface-gray-3 data-[highlighted]:bg-surface-gray-3 data-[state=open]:bg-surface-gray-3 whitespace-nowrap text-ink-gray-7 cursor-pointer justify-between"
-                >
-                  <span>
-                    {{ item.label }}
-                  </span>
-                </div>
-              </template>
-              <template #item-suffix="{ item }">
-                <FeatherIcon
-                  v-if="item.label == __(periodLabels[currentPeriod])"
-                  name="check"
-                  class="size-4"
+                <Button
+                  :label="currentSortLabel"
+                  icon-right="lucide-chevron-down"
                 />
               </template>
-            </Dropdown>
-            <Dropdown :options="sortOptions" placement="right">
-              <template #default>
-                <Button :label="currentSortLabel" icon-right="chevron-down" />
-              </template>
               <template #item-label="{ item }">
                 <div
                   class="data-[disabled]:cursor-not-allowed group flex w-full items-center rounded px-2 text-base focus:outline-none focus:bg-surface-gray-3 data-[highlighted]:bg-surface-gray-3 data-[state=open]:bg-surface-gray-3 whitespace-nowrap text-ink-gray-7 cursor-pointer justify-between"
                 >
-                  <span>
-                    {{ item.label }}
-                  </span>
+                  <span>{{ item.label }}</span>
                 </div>
               </template>
               <template #item-suffix="{ item }">
@@ -114,107 +113,177 @@
                 />
               </template>
             </Dropdown>
+
+            <!-- Period dropdown second -->
+            <div class="flex items-center gap-2 ms-auto">
+              <Dropdown
+                v-if="!showDatePicker && currentPeriod !== 'custom_range'"
+                :options="periodOptions"
+                placement="right"
+              >
+                <template #default>
+                  <Button
+                    :label="currentPeriodLabel"
+                    icon-right="lucide-chevron-down"
+                  />
+                </template>
+                <template #item-label="{ item }">
+                  <div
+                    class="data-[disabled]:cursor-not-allowed group flex w-full items-center rounded px-2 text-base focus:outline-none focus:bg-surface-gray-3 data-[highlighted]:bg-surface-gray-3 data-[state=open]:bg-surface-gray-3 whitespace-nowrap text-ink-gray-7 cursor-pointer justify-between"
+                  >
+                    <span>
+                      {{ item.label }}
+                    </span>
+                  </div>
+                </template>
+                <template #item-suffix="{ item }">
+                  <FeatherIcon
+                    v-if="item.label == __(periodLabels[currentPeriod])"
+                    name="check"
+                    class="size-4"
+                  />
+                </template>
+              </Dropdown>
+              <DateRangePicker
+                v-if="showDatePicker || currentPeriod === 'custom_range'"
+                ref="datePickerRef"
+                :model-value="customDateRange ? customDateRange.split(',') : []"
+                :placeholder="__('Select range')"
+                @update:model-value="onCustomRangeSelected"
+                :format="'MMM D'"
+                @click="datePickerRef?.open()"
+                side="top"
+                align="start"
+                class="!w-48"
+              />
+            </div>
           </div>
-
-          <!-- Feedback Card -->
-          <div
-            v-if="currentFeedback && chartConfig.totalFeedbacks > 0"
-            class="flex-1 flex flex-col rounded-lg mt-2"
-          >
-            <!-- Ticket Info -->
-            <div class="flex items-center gap-1 text-base text-ink-gray-5">
-              <div
-                class="flex items-center gap-0.5 hover:text-ink-gray-7 cursor-pointer font-medium"
-                @click="goToTicket(currentFeedback)"
-              >
-                <FeatherIcon name="arrow-up-right" class="size-4" />
-                {{ currentFeedback.name }}
-              </div>
-              <span class="text-ink-gray-4">·</span>
-              <span class="truncate text-ink-gray-7 font-medium">{{
-                currentFeedback.subject
-              }}</span>
-            </div>
-            <hr class="my-2" />
-            <!-- Rating & Title -->
-            <div class="flex items-center gap-2 mb-2">
-              <div
-                class="flex items-center gap-1 p-1 pl-0 rounded"
-                :class="[getRatingColor(currentFeedback.star_rating).text]"
-              >
-                <LucideStar
-                  class="size-3.5"
-                  :class="getRatingColor(currentFeedback.star_rating).text"
-                />
-                <span
-                  class="text-base font-medium text-ink-gray-7"
-                  :class="getRatingColor(currentFeedback.star_rating).text"
-                  >{{ currentFeedback.star_rating }}</span
+          <div class="flex-1 flex flex-col min-h-0">
+            <!-- Feedback Card -->
+            <div
+              v-if="currentFeedback && chartConfig.totalFeedbacks > 0"
+              class="flex-1 flex flex-col rounded-lg mt-2 relative z-20"
+            >
+              <!-- Ticket Info -->
+              <div class="flex items-center gap-1 text-base text-ink-gray-5">
+                <div
+                  class="flex items-center gap-0.5 hover:text-ink-gray-7 cursor-pointer font-medium"
+                  @click="goToTicket(currentFeedback)"
                 >
+                  <FeatherIcon name="arrow-up-right" class="size-4" />
+                  {{ currentFeedback.name }}
+                </div>
+                <span class="text-ink-gray-4">·</span>
+                <span class="truncate text-ink-gray-7 font-medium">{{
+                  currentFeedback.subject
+                }}</span>
               </div>
-              <span class="text-base text-ink-gray-7 font-medium">{{
-                currentFeedback.feedback || __("Feedback")
-              }}</span>
-            </div>
+              <hr class="my-2" />
+              <!-- Rating & Title -->
+              <div class="flex items-center gap-2 mb-2">
+                <div
+                  class="flex items-center gap-1 p-1 ps-0 rounded"
+                  :class="[getRatingColor(currentFeedback.star_rating).text]"
+                >
+                  <LucideStar
+                    class="size-3.5"
+                    :class="getRatingColor(currentFeedback.star_rating).text"
+                  />
+                  <span
+                    class="text-base font-medium text-ink-gray-7"
+                    :class="getRatingColor(currentFeedback.star_rating).text"
+                    >{{ currentFeedback.star_rating }}</span
+                  >
+                </div>
+                <span class="text-base text-ink-gray-7 font-medium">{{
+                  currentFeedback.feedback || __("Feedback")
+                }}</span>
+              </div>
 
-            <!-- Feedback Text -->
-            <div class="text-p-base text-ink-gray-7 mb-3 line-clamp-3">
-              {{
-                currentFeedback.feedback_extra || __("No additional comments")
-              }}
-            </div>
+              <!-- Feedback Text -->
+              <div class="text-p-base text-ink-gray-7 mb-3 line-clamp-3">
+                {{
+                  currentFeedback.feedback_extra || __("No additional comments")
+                }}
+              </div>
 
-            <!-- Contact & Navigation -->
-            <div class="flex items-center justify-between mt-auto">
-              <div class="flex items-center gap-1">
-                <Avatar
-                  :image="currentFeedback.contact_image"
-                  :label="
+              <!-- Contact & Navigation -->
+              <div class="flex items-center justify-between mt-auto">
+                <div class="flex items-center gap-1">
+                  <Avatar
+                    :image="currentFeedback.contact_image"
+                    :label="
+                      currentFeedback.contact_name || currentFeedback.contact
+                    "
+                    size="sm"
+                  />
+                  <span class="text-sm text-ink-gray-6">{{
                     currentFeedback.contact_name || currentFeedback.contact
-                  "
-                  size="sm"
-                />
-                <span class="text-sm text-ink-gray-6">{{
-                  currentFeedback.contact_name || currentFeedback.contact
-                }}</span>
-                <span class="text-sm text-ink-gray-4">·</span>
-                <span class="text-sm text-ink-gray-5">{{
-                  timeAgo(currentFeedback.modified)
-                }}</span>
+                  }}</span>
+                  <span class="text-sm text-ink-gray-4">·</span>
+                  <span class="text-sm text-ink-gray-5">{{
+                    timeAgo(currentFeedback.modified)
+                  }}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    @click="prevFeedback"
+                    :disabled="currentIndex === 0"
+                  >
+                    <FeatherIcon
+                      name="chevron-left"
+                      class="size-4 rtl:rotate-180"
+                    />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    @click="nextFeedback"
+                    :disabled="currentIndex >= chartConfig.feedbacks.length - 1"
+                  >
+                    <FeatherIcon
+                      name="chevron-right"
+                      class="size-4 rtl:rotate-180"
+                    />
+                  </Button>
+                </div>
               </div>
-              <div class="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  @click="prevFeedback"
-                  :disabled="currentIndex === 0"
-                >
-                  <FeatherIcon name="chevron-left" class="size-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  @click="nextFeedback"
-                  :disabled="currentIndex >= chartConfig.feedbacks.length - 1"
-                >
-                  <FeatherIcon name="chevron-right" class="size-4" />
-                </Button>
+            </div>
+            <div
+              v-else
+              class="flex-1 flex flex-col rounded-lg mt-2 select-none pointer-events-none"
+            >
+              <div class="flex items-center gap-1 py-1">
+                <div class="w-64 h-4 bg-surface-gray-1 rounded-sm" />
+              </div>
+              <hr class="my-2 border-surface-gray-2" />
+              <div class="flex items-center gap-2 mb-3 mt-1">
+                <div class="w-12 h-5 bg-surface-gray-1 rounded-sm" />
+                <div class="w-56 h-5 bg-surface-gray-1 rounded-sm" />
+              </div>
+              <div class="w-48 h-4 bg-surface-gray-1 rounded-sm mb-3" />
+              <div class="flex items-center justify-between mt-auto">
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded-full bg-surface-gray-1" />
+                  <div class="w-32 h-3 bg-surface-gray-1 rounded-sm" />
+                </div>
+                <div class="flex items-center gap-1">
+                  <div class="w-16 h-6 bg-surface-gray-1 rounded-sm" />
+                </div>
               </div>
             </div>
           </div>
-          <div
-            v-else
-            class="flex flex-col justify-center items-center text-center gap-2 h-full w-full"
-          >
-            <div class="flex flex-col gap-2 max-w-60">
-              <div class="text-base font-medium text-ink-gray-7">
-                {{ __("No feedback") }}
-              </div>
-              <div class="text-base text-ink-gray-6">
-                {{ __("You haven't received any feedback yet") }}
-              </div>
-            </div>
-          </div>
+        </div>
+        <div class="z-10" v-if="chartConfig.totalFeedbacks === 0">
+          <EmptyState
+            class="absolute inset-0 z-10"
+            variant="overlay"
+            :title="__('No feedback')"
+            :description="__('You haven\'t received any feedback yet')"
+            text="md"
+          />
         </div>
       </div>
     </div>
@@ -222,16 +291,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, type PropType } from "vue";
+import { ref, computed, onMounted, nextTick, type PropType } from "vue";
 import {
   Avatar,
   Button,
   createResource,
+  DateRangePicker,
   Dropdown,
   FeatherIcon,
   TabButtons,
   ECharts,
 } from "frappe-ui";
+import { dataTheme } from "@/utils";
 import LucideStar from "~icons/lucide/star";
 import { useRouter } from "vue-router";
 import { dayjsLocal } from "frappe-ui";
@@ -240,11 +311,12 @@ import { timeAgo } from "@/utils";
 import type { EChartsOption } from "echarts";
 import { useView } from "@/composables/useView";
 import { View } from "@/types";
+import EmptyState from "@/components/EmptyState.vue";
 
 const router = useRouter();
 const chartTabs = [
-  { label: "Rating", value: "rating" },
-  { label: "Feedback", value: "feedback" },
+  { label: __("Rating"), value: "rating" },
+  { label: __("Feedback"), value: "feedback" },
 ];
 const currentTab = ref("rating");
 const { views } = useView("HD Ticket");
@@ -279,6 +351,9 @@ const props = defineProps({
 const currentIndex = ref(0);
 const currentPeriod = ref("all_time");
 const currentSort = ref("positive_first");
+const showDatePicker = ref(false);
+const datePickerRef = ref<{ open: () => void } | null>(null);
+const customDateRange = ref<string | undefined>(undefined);
 
 const periodOptions = computed(() => [
   {
@@ -296,6 +371,15 @@ const periodOptions = computed(() => [
   {
     label: __("Last 3 Months"),
     onClick: () => changePeriod("last_3_months"),
+  },
+  {
+    label: __("Custom Range"),
+    onClick: () => {
+      showDatePicker.value = true;
+      nextTick(() => {
+        datePickerRef.value?.open();
+      });
+    },
   },
 ]);
 
@@ -315,6 +399,7 @@ const periodLabels: Record<string, string> = {
   last_week: __("Last Week"),
   last_month: __("Last Month"),
   last_3_months: __("Last 3 Months"),
+  custom_range: __("Custom Range"),
 };
 
 const currentPeriodLabel = computed(() => {
@@ -332,6 +417,8 @@ const currentSortLabel = computed(() => {
 
 const changePeriod = (period: string) => {
   if (currentPeriod.value == period) return;
+  showDatePicker.value = false;
+  customDateRange.value = undefined;
   currentPeriod.value = period;
   currentIndex.value = 0;
   getRecentFeedbackResource.fetch();
@@ -340,6 +427,22 @@ const changePeriod = (period: string) => {
 const changeSort = (sort: string) => {
   if (currentSort.value == sort) return;
   currentSort.value = sort;
+  currentIndex.value = 0;
+  getRecentFeedbackResource.fetch();
+};
+
+const onCustomRangeSelected = (range: string[]) => {
+  if (!range?.length) {
+    showDatePicker.value = false;
+    currentPeriod.value = "all_time";
+    customDateRange.value = undefined;
+    currentIndex.value = 0;
+    getRecentFeedbackResource.fetch();
+    return;
+  }
+  showDatePicker.value = false;
+  currentPeriod.value = "custom_range";
+  customDateRange.value = range.join(",");
   currentIndex.value = 0;
   getRecentFeedbackResource.fetch();
 };
@@ -382,6 +485,14 @@ const currentFeedback = computed(() => {
 });
 
 const barChartOptions = computed<EChartsOption>(() => {
+  // re-compute on theme change
+  void dataTheme.value;
+
+  const mutedBarColor = cssVar("--surface-gray-4");
+  const axisLineColor = cssVar("--outline-gray-1");
+  const axisLabelColor = cssVar("--ink-gray-5");
+  const goldBarColor = "#de9735"; // brand rating gold, intentional
+
   const distribution = chartConfig.value.ratingDistribution;
   const values = [1, 2, 3, 4, 5].map((star) => distribution[star] || 0);
   const maxValue = Math.max(...values);
@@ -392,14 +503,14 @@ const barChartOptions = computed<EChartsOption>(() => {
     return {
       value,
       itemStyle: {
-        color: isMax ? "#de9735" : "#d1d5db",
+        color: isMax ? goldBarColor : mutedBarColor,
         borderRadius: [4, 4, 0, 0],
       },
       label: {
         show: isMax,
         position: "top" as const,
         formatter: value > 0 ? String(value) : "",
-        color: "#6b7280",
+        color: axisLabelColor,
         fontSize: 12,
       },
       emphasis: {
@@ -421,10 +532,10 @@ const barChartOptions = computed<EChartsOption>(() => {
     xAxis: {
       type: "category",
       data: ["1", "2", "3", "4", "5"],
-      axisLine: { show: true, lineStyle: { color: "#ededed" } },
+      axisLine: { show: true, lineStyle: { color: axisLineColor } },
       axisTick: { show: false },
       axisLabel: {
-        color: "#6b7280",
+        color: axisLabelColor,
         fontSize: 12,
       },
     },
@@ -439,7 +550,7 @@ const barChartOptions = computed<EChartsOption>(() => {
         barWidth: 24,
         label: {
           position: "top",
-          color: "#6b7280",
+          color: axisLabelColor,
           fontSize: 12,
           formatter: (params: any) => (params.value > 0 ? params.value : ""),
         },
@@ -452,7 +563,17 @@ const barChartOptions = computed<EChartsOption>(() => {
   };
 });
 
+const cssVar = (name: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 const placeholderChartOptions = computed<EChartsOption>(() => {
+  // re-compute on theme change
+  void dataTheme.value;
+
+  const placeholderColor = cssVar("--surface-gray-3");
+  const axisLineColor = cssVar("--outline-gray-2");
+  const axisLabelColor = cssVar("--ink-gray-5");
+
   const placeholderValues = Array.from(
     { length: 5 },
     () => Math.floor(Math.random() * 11) + 3
@@ -460,7 +581,7 @@ const placeholderChartOptions = computed<EChartsOption>(() => {
   const data = placeholderValues.map((value) => ({
     value,
     itemStyle: {
-      color: "#f1f1f1",
+      color: placeholderColor,
       borderRadius: [4, 4, 0, 0],
     },
   }));
@@ -476,10 +597,10 @@ const placeholderChartOptions = computed<EChartsOption>(() => {
     xAxis: {
       type: "category",
       data: ["1", "2", "3", "4", "5"],
-      axisLine: { show: true, lineStyle: { color: "#e2e2e2" } },
+      axisLine: { show: true, lineStyle: { color: axisLineColor } },
       axisTick: { show: false },
       axisLabel: {
-        color: "#e2e2e2",
+        color: axisLabelColor,
         fontSize: 12,
       },
     },
@@ -511,24 +632,31 @@ const redirectToSeeAllReviews = () => {
 
   if (currentPeriod.value !== "all_time") {
     let dateFilter = "";
-    if (currentPeriod.value === "last_week") {
-      dateFilter = dayjsLocal()
-        .subtract(7, "day")
-        .format("YYYY-MM-DD HH:mm:ss");
-    } else if (currentPeriod.value === "last_month") {
-      dateFilter = dayjsLocal()
-        .subtract(30, "day")
-        .format("YYYY-MM-DD HH:mm:ss");
-    } else if (currentPeriod.value === "last_3_months") {
-      dateFilter = dayjsLocal()
-        .subtract(90, "day")
-        .format("YYYY-MM-DD HH:mm:ss");
-    }
-
-    if (dateFilter) {
+    if (currentPeriod.value === "custom_range" && customDateRange.value) {
+      const [from, to] = customDateRange.value.split(",");
       query.filters = JSON.stringify({
-        modified: [">", dateFilter],
+        modified: ["between", [`${from} 00:00:00`, `${to} 23:59:59`]],
       });
+    } else {
+      if (currentPeriod.value === "last_week") {
+        dateFilter = dayjsLocal()
+          .subtract(7, "day")
+          .format("YYYY-MM-DD HH:mm:ss");
+      } else if (currentPeriod.value === "last_month") {
+        dateFilter = dayjsLocal()
+          .subtract(30, "day")
+          .format("YYYY-MM-DD HH:mm:ss");
+      } else if (currentPeriod.value === "last_3_months") {
+        dateFilter = dayjsLocal()
+          .subtract(90, "day")
+          .format("YYYY-MM-DD HH:mm:ss");
+      }
+
+      if (dateFilter) {
+        query.filters = JSON.stringify({
+          modified: [">", dateFilter],
+        });
+      }
     }
   }
 
@@ -558,10 +686,18 @@ const getRatingColor = (rating: number) => {
 
 const getRecentFeedbackResource = createResource({
   url: "helpdesk.api.agent_home.agent_home.get_recent_feedback",
-  makeParams: () => ({
-    period: currentPeriod.value,
-    sort_order: currentSort.value,
-  }),
+  makeParams: () => {
+    const params: Record<string, string> = {
+      period: currentPeriod.value,
+      sort_order: currentSort.value,
+    };
+    if (currentPeriod.value === "custom_range" && customDateRange.value) {
+      const [from, to] = customDateRange.value.split(",");
+      params.from_date = from;
+      params.to_date = to;
+    }
+    return params;
+  },
 });
 
 const goToTicket = (feedback: Feedback) => {

@@ -5,6 +5,7 @@ from frappe.core.doctype.communication.test_communication import create_email_ac
 from frappe.utils import add_to_date, getdate
 
 from helpdesk.api.settings.field_dependency import create_update_field_dependency
+from helpdesk.integrations.erpnext.utils import create_customer_field
 from helpdesk.utils import is_frappe_version
 
 if is_frappe_version("16", above=True):
@@ -28,6 +29,7 @@ def before_tests():
     make_new_sla()
     make_test_objects("Email Domain", reset=True)
     create_email_account()
+    create_customer_field()
     frappe.db.commit()  # nosemgrep
 
 
@@ -261,6 +263,18 @@ def make_status(name: str = "Test Status", category: str = "Open"):
     return doc.insert(ignore_if_duplicate=True)
 
 
+def make_agent_status(agent_status: str, category="Away", enable=1, status_order=None):
+    return frappe.get_doc(
+        {
+            "doctype": "HD Agent Status",
+            "agent_status": agent_status,
+            "category": category,
+            "enable": enable,
+            "status_order": status_order,
+        }
+    ).insert()
+
+
 def make_agent(email: str, first_name: str = "Test Agent"):
     """
     Creates a test user and HD Agent if they don't exist.
@@ -277,6 +291,24 @@ def make_agent(email: str, first_name: str = "Test Agent"):
         ).insert(ignore_permissions=True)
 
     return email
+
+
+def get_latest_ticket_communication(ticket_name: str):
+    """
+    Returns the latest Communication doc linked to the given HD Ticket.
+    """
+    name = frappe.get_all(
+        "Communication",
+        filters={
+            "reference_doctype": "HD Ticket",
+            "reference_name": ticket_name,
+        },
+        pluck="name",
+        limit=1,
+    )
+    if not name:
+        return None
+    return frappe.get_doc("Communication", name[0])
 
 
 def add_comment(
@@ -301,11 +333,14 @@ def add_comment(
     return comment
 
 
-def make_team(team_name, members=[]):
-    """Create an HD Team with optional members."""
+def make_team(team_name, members=[], disabled=False):
+    """Create an HD Team with optional members. A default agent is created if no members are provided."""
+    if not members:
+        members = [make_agent("default_team_agent@example.com")]
+
     if frappe.db.exists("HD Team", team_name):
-        # Delete existing team members
         team = frappe.get_doc("HD Team", team_name)
+        team.disabled = disabled
         team.users = []
         for member in members:
             team.append("users", {"user": member})
@@ -321,5 +356,24 @@ def make_team(team_name, members=[]):
     )
     for member in members:
         team.append("users", {"user": member})
+    team.disabled = disabled
     team.insert(ignore_permissions=True)
     return team
+
+
+def upload_test_file(file_name: str) -> str:
+    """Upload an image from desk/src/assets/images/ as a standalone private File, returning its name."""
+    file_path = frappe.get_app_path(
+        "helpdesk", "..", "desk", "src", "assets", "images", file_name
+    )
+    with open(file_path, "rb") as f:
+        content = f.read()
+    file_doc = frappe.get_doc(
+        {
+            "doctype": "File",
+            "file_name": file_name,
+            "is_private": 1,
+            "content": content,
+        }
+    ).insert(ignore_permissions=True)
+    return file_doc.name
